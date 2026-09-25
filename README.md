@@ -9,15 +9,20 @@ raised scale layer for dual-color printing on the AMS.
 - `koi_joint_test.scad` — the parametric model.
 - `export/joint_test_body.stl` — base body (both segments + joint), color 1.
 - `export/joint_test_scales.stl` — raised scale layer, color 2.
-- `export/koi_joint_test.3mf` — combined export (see note below on why the
-  two STLs are the reliable path).
+- `export/koi_joint_test.3mf` — combined preview export only; confirmed
+  single-object, see note below.
 
-## Why two STLs instead of one 3MF
+## Use the two STLs, not the 3MF
 
-OpenSCAD 2021.01's built-in 3MF exporter flattens the design to a single mesh
-— it does not preserve separate "objects" inside one 3MF the way Bambu
-Studio needs in order to expose two paintable parts. So the reliable
-workflow is:
+Confirmed in this environment: OpenSCAD 2021.01's built-in 3MF exporter
+flattens the whole design into a **single mesh/object** (verified by
+inspecting the exported `3D/3dmodel.model` XML — it contains exactly one
+`<object>` element covering both the body and the scales). It does not
+preserve them as separate objects the way Bambu Studio needs in order to
+expose two independently paintable parts, so `koi_joint_test.3mf` is only
+useful as a quick single-color preview, not for AMS slot assignment.
+
+Use the two STL files instead — that's the reliable workflow:
 
 1. In Bambu Studio, **Import** both `joint_test_body.stl` and
    `joint_test_scales.stl` into the same project.
