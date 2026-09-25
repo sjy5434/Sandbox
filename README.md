@@ -1,112 +1,82 @@
-# Koi Fish Joint Test Piece
+# Articulating Koi Fish — Project Roadmap
 
-A small OpenSCAD test print for an articulating koi fish: two tapered body
-segments joined by a print-in-place ball-and-socket joint, with a separate
-raised scale layer for dual-color printing on the AMS.
+This project is being built in deliberate steps rather than all at once:
 
-## Files
+1. **`koi_body_v1.scad` (this step)** — a small, single-object, single-color
+   koi silhouette. No articulation, no scale texture. The goal is just to
+   get the body/fin shape right before anything else is layered on.
+2. Scale this body up and split it into an articulating multi-segment
+   version (still single color), reusing the same body profile curve.
+3. Print just the head + first body segment to test the joint(s) from step 2
+   in isolation before committing to a full-length print.
+4. Add a separate, second-color scale layer modeled as overlapping koi-scale
+   shapes (not a generic bump grid) that follow the body surface from step
+   2/3, for dual-color AMS printing.
 
-- `koi_joint_test.scad` — the parametric model.
-- `export/joint_test_body.stl` — base body (both segments + joint), color 1.
-- `export/joint_test_scales.stl` — raised scale layer, color 2.
-- `export/koi_joint_test.3mf` — combined preview export only; confirmed
-  single-object, see note below.
+A standard koi and a butterfly koi (longer fins) variant are both planned for
+later once the base body/joint design is solid.
 
-## Use the two STLs, not the 3MF
+## This step: `koi_body_v1.scad`
 
-Confirmed in this environment: OpenSCAD 2021.01's built-in 3MF exporter
-flattens the whole design into a **single mesh/object** (verified by
-inspecting the exported `3D/3dmodel.model` XML — it contains exactly one
-`<object>` element covering both the body and the scales). It does not
-preserve them as separate objects the way Bambu Studio needs in order to
-expose two independently paintable parts, so `koi_joint_test.3mf` is only
-useful as a quick single-color preview, not for AMS slot assignment.
+A single continuous manifold solid: fusiform (torpedo-shaped, laterally
+compressed) body built as a "sphere loft" along the spine, plus a smooth
+gently-forked tail fin, a rounded sail-like dorsal fin, two angled pectoral
+fins, small proud eyes, and optional thin mouth barbels (a koi/carp
+identifier).
 
-Use the two STL files instead — that's the reliable workflow:
+### How the body shape works
 
-1. In Bambu Studio, **Import** both `joint_test_body.stl` and
-   `joint_test_scales.stl` into the same project.
-2. They will already be aligned (both were exported from the same
-   coordinate system in the .scad file — don't move one without the other).
-3. Right-click each part → assign it to a different AMS filament slot
-   (e.g. body → slot 1, scales → slot 2).
-4. Group/arrange as needed, but keep their relative position fixed so the
-   scale layer still sits flush on the body surface.
+`profile_keys` defines a handful of (position-along-body, width-scale,
+height-scale) control points from nose to tail peduncle — blunt rounded
+nose, quick widening through the head/gills, widest at the "shoulder,"
+gradual taper into a narrow peduncle. `profile_at(t)` cosine-interpolates
+between them. `fish_body()` walks along the spine placing a squashed sphere
+(ellipsoid) at each station per that profile and `hull()`s each consecutive
+pair, producing one smooth continuous surface — no discrete segments yet
+(that comes in step 2).
 
-If you'd rather have a single file, Bambu Studio can merge the two STLs into
-one project and re-export as a `.3mf` itself — that project-level 3MF *does*
-preserve the two objects/paint assignments, unlike OpenSCAD's exporter.
+Fins are built the same way conceptually: 2D outlines (as `hull()`s of
+circles, or a couple of extra shape tricks) linear-extruded to a thin
+constant thickness, then rotated/positioned onto the body. The tail fin's
+notch is cut with a wedge polygon that starts beyond the fin's own tip
+(guaranteeing it actually breaches the outer edge) rather than a circle
+sitting mid-fin, which is what produced an isolated hole in an earlier
+draft.
 
-## Print orientation
+### Key parameters (top of the file)
 
-**Print it exactly as modeled — joint axis vertical (Z), no rotation in the
-slicer.** The socket cavity opens upward by design:
+- `body_length`, `max_width`, `max_height` — overall body size.
+- `tail_length`, `tail_fork` — tail fin length and how deeply forked it is
+  (0 ≈ single rounded fan, 1 ≈ deep fork).
+- `dorsal_start_t` / `dorsal_end_t` / `dorsal_height` — where the dorsal fin
+  sits along the body and how tall it stands.
+- `pectoral_t`, `pectoral_droop`, `pectoral_sweep` — pectoral fin placement
+  and angle.
+- `include_barbels` — the mouth barbels print as ~0.8 mm-diameter whiskers;
+  disable this if your nozzle/printer can't resolve them cleanly.
+- `body_stations` — resolution of the body loft (higher = smoother + slower
+  to render).
 
-- Segment B (bottom) tapers 18→14 mm and has the ball-cage/socket carved
-  into its top.
-- The ball (attached to segment A) sits inside that cage with a uniform
-  `joint_clearance` (0.3 mm default) gap on all sides.
-- Segment A (top) tapers 14→18 mm, connected to the ball by a short neck rod
-  that passes up through a flared opening in the socket's top.
+### Geometry check
 
-Because the opening faces up, the ball's equator and upper hemisphere print
-as a series of closely-nested rings right next to the matching socket wall,
-separated only by the clearance gap. That gap is small enough to bridge
-layer-by-layer, so **no internal supports are needed inside the joint
-cavity**. Do not lay the part on its side — that reintroduces a real
-overhang on the ball and will force supports that fuse into the socket.
+Exported to `export/koi_body_v1.stl` and independently verified:
+- OpenSCAD's own render report: `Simple: yes` (2D-manifold), 2 volumes (the
+  single connected solid + the unbounded exterior — expected for one
+  connected body).
+- `trimesh`: `is_watertight: True`, `is_winding_consistent: True`.
 
-No supports are needed anywhere else on the part either (the tapered bodies
-and scale bumps are all self-supporting/shallow-angle geometry). Standard
-0.2 mm layer height should be fine; if your printer/filament tends to blob
-on bridges, consider dropping to 0.16 mm around the joint region only.
+### Size
 
-## Build volume sanity check
+Bounding box ≈ 81 mm (L, including tail fin) × 17.7 mm (W, including
+pectoral fins) × 27.6 mm (H, including the dorsal fin) — well within the
+Bambu Lab A1 mini's 180×180×180 mm build volume.
 
-With the default parameters:
+### Printing this step
 
-- Total height ≈ 25 (segment B) + ~11.6 (joint/neck region) + 25 (segment A)
-  ≈ **61.6 mm**
-- Max diameter ≈ **18 mm** (the large end of each segment; the joint knuckle
-  bulges to ~15.2 mm, still under the segment's max diameter)
-
-That's a footprint on the order of 18 × 18 mm and ~62 mm tall — trivially
-within the Bambu Lab A1 mini's 180 × 180 × 180 mm build volume, whether you
-print it standing up (as recommended) or need to reorient for some other
-reason.
-
-## Judging `joint_clearance` after the test print
-
-Print with the default `joint_clearance = 0.3` mm first, then adjust based
-on what you see:
-
-**Too tight (fused / won't move):**
-- The joint doesn't rotate at all, or takes visible force and grinds/creaks.
-- You see witness marks or torn strands where the ball and socket surfaces
-  touched and welded together during printing.
-- Twisting it further shows white stress marks or the neck rod flexing
-  instead of the ball rotating.
-- Fix: increase `joint_clearance` in 0.05–0.1 mm steps (try 0.35, then 0.4)
-  and reprint.
-
-**Too loose (sloppy articulation):**
-- The ball rattles inside the socket or has noticeable play/wobble beyond
-  just rotating.
-- You can see daylight/gap around the ball when viewed from the side at the
-  equator, well beyond a thin uniform line.
-- The joint flops under the segment's own weight instead of holding a pose.
-- Fix: decrease `joint_clearance` in 0.05 mm steps (try 0.25, then 0.2) and
-  reprint. Very fine-detail printers/filaments (e.g. well-tuned PETG or ABS)
-  can often go tighter than PLA before fusing.
-
-**Good result:** the joint rotates smoothly with light, consistent
-resistance in every direction, holds a pose against gravity, and shows no
-fused/torn surface texture when you look inside the visible neck opening.
-
-Other parameters worth revisiting once clearance is dialed in:
-- `opening_extra` / `opening_flare` control how much the ball can swing
-  before the neck rod hits the socket's opening wall — widen these if you
-  want more range of motion once the base friction is right.
-- `scale_size`, `scale_spacing_v`, `scale_spacing_a`, `scale_height` control
-  the scale texture density/relief and can be tuned independently of the
-  joint.
+This step is just a shape check, not the articulation test — print it lying
+on its side (as it naturally rests) for the least overhang: the belly is the
+flattest, lowest part of the profile. The dorsal fin and tail lobes will
+want light support material since they're thin vertical fins sticking up
+off the body when laid on its side; that's expected and fine for a
+single-color shape-proofing print. Articulation/joint printing concerns
+come in step 3.
